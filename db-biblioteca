@@ -1,0 +1,147 @@
+create table leitores(
+	id serial primary key,
+	nome varchar(100) not null,
+	email varchar(200) unique not null,
+	cpf varchar(11) unique not null,
+	telefone varchar(20) not null,
+	data_cadastro timestamp default current_timestamp
+);
+create table categorias (
+	id serial primary key,
+	nome varchar(100) unique not null
+);
+create table livros(
+	id serial primary key,
+	categoria_id int references categorias(id),
+	titulo varchar(100) not null,
+	isbn varchar(10) unique not null,
+	taxa_diaria decimal(10, 2) not null check(taxa_diaria > 0),
+	disponivel boolean default true
+);
+create table emprestimos(
+	id serial primary key,
+	leitor_id int references leitores(id),
+	data_emprestimo timestamp default current_timestamp,
+	status varchar(100) default 'Ativo' check(status in('Ativo', 'Devolvido', 'Atrasado'))
+);
+create table itens_emprestimo(
+	id serial primary key,
+	emprestimo_id int references emprestimos(id),
+	livro_id int references livros(id),
+	quantidade int not null check(quantidade > 0)
+);
+
+
+INSERT INTO categorias (nome) VALUES 
+('Ficção'),
+('História'),
+('Tecnologia');
+
+INSERT INTO livros (categoria_id, titulo, isbn, taxa_diaria, disponivel) VALUES 
+(1, 'O Senhor dos Anéis', '9788533613379', 6.50, TRUE),
+(3, 'Entendendo Algoritmos', '9788575225639', 8.00, TRUE),
+(2, 'Sapiens: Uma Breve História da Humanidade', '9788535925661', 4.50, TRUE);
+
+INSERT INTO leitores (nome, email, cpf, telefone) VALUES 
+('Carlos Silva', 'carlos.silva@email.com', '12345678901', '48999990001'),
+('Ana Maria', 'ana.maria@email.com', '98765432100', '48999990002'),
+('João Pedro', 'joao.pedro@email.com', '45678912345', '48999990003');
+
+INSERT INTO emprestimos (leitor_id, status) VALUES 
+(1, 'Ativo'),
+(1, 'Devolvido'),
+(2, 'Devolvido'),
+(3, 'Atrasado');
+
+INSERT INTO itens_emprestimo (emprestimo_id, livro_id, quantidade, valor_diaria) VALUES 
+(1, 1, 1, 6.50),
+(2, 2, 2, 8.00),
+(3, 3, 1, 4.50),
+(4, 1, 1, 6.50);
+
+create view vw_acervo_ordenado as
+
+select
+	lv.titulo,
+	lv.isbn,
+	c.nome,
+	lv.taxa_diaria
+from
+	livros lv
+join
+	categorias c on c.id = lv.categoria_id
+order by
+	lv.taxa_diaria asc;
+
+create view vw_emprestimos_carlos as
+
+select
+	lt.nome,
+	e.id,
+	e.data_emprestimo,
+	lv.titulo,
+	ie.quantidade,
+	e.status
+from
+	emprestimos e
+join
+	leitores lt on lt.id = e.leitor_id
+join
+	itens_emprestimo ie on e.id = ie.emprestimo_id
+join
+	livros lv on lv.id = ie.livro_id
+
+where
+	lt.nome = 'Carlos Silva'
+
+create view vw_total_emprestimos as
+
+select
+	e.id,
+	lt.nome,
+	SUM(ie.quantidade * lv.taxa_diaria) as valor_total
+from
+	emprestimos e
+join
+	itens_emprestimo ie on e.id = ie.emprestimo_id
+join
+	leitores lt on lt.id = e.leitor_id
+join
+	livros lv on lv.id = ie.livro_id
+group by
+	e.id, lt.nome
+
+select
+	c.nome,
+	lv.titulo,
+	lv.taxa_diaria,
+	lv.disponivel
+from
+	livros lv
+join
+	itens_emprestimo ie on lv.id = ie.livro_id
+join
+	categorias c on c.id = lv.categoria_id
+where
+	c.nome = 'Ficção'
+	and
+	lv.taxa_diaria > 5.00
+	and
+	lv.disponivel = true
+
+create view vw_faturamento_por_categoria as
+
+select 
+	c.nome as categoria, 
+	sum(ie.quantidade * ie.valor_diaria) as faturamento_total
+
+from 
+	itens_emprestimo ie
+join 
+	emprestimos emp on ie.emprestimo_id = emp.id
+join
+	livros l on ie.livro_id = l.id
+join
+	categorias c on l.categoria_id = c.id
+where emp.status = 'Devolvido'
+group by c.nome;
